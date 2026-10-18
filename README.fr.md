@@ -31,10 +31,11 @@ opérationnelles, séparées des prédictions du modèle.
 
 ### Démonstration enregistrée
 
-Cette capture animée provient du navigateur réel : chargement, évaluation,
-activation explicite et prédictions. Toutes les commandes montrées sont synthétiques.
+Cliquer sur l'aperçu pour ouvrir la capture animée du navigateur réel : chargement,
+évaluation, activation explicite et prédictions. Toutes les commandes montrées sont
+synthétiques. L'aperçu reste lisible pendant le téléchargement de l'animation.
 
-![Parcours réel dans DeliveryGuard sur données synthétiques](docs/demo.gif)
+[![Ouvrir la démonstration enregistrée de DeliveryGuard](docs/screenshots/07-risk-ranking.png)](https://raw.githubusercontent.com/OmarElkhali/DeliveryGuard/main/docs/demo.gif)
 
 ## Parcours illustré — du CSV au classement
 

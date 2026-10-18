@@ -30,10 +30,11 @@ alerts, independently of the machine-learning model.
 
 ### Recorded demonstration
 
-The recording below comes from the real local application, including upload,
-evaluation, activation and predictions. All records shown are synthetic.
+Click the preview to open the recorded browser demonstration, including upload,
+evaluation, activation and predictions. All records shown are synthetic. A static
+preview keeps this long report readable while the animation downloads.
 
-![Recorded DeliveryGuard browser walkthrough on synthetic data](docs/demo.gif)
+[![Open the recorded DeliveryGuard browser demonstration](docs/screenshots/07-risk-ranking.png)](https://raw.githubusercontent.com/OmarElkhali/DeliveryGuard/main/docs/demo.gif)
 
 ## A delivery-history-to-risk-ranking walkthrough
 
