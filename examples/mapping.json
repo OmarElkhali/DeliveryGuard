@@ -1,0 +1,8 @@
+{
+  "commande": "order_id",
+  "date_commande": "ordered_at",
+  "date_prevue": "promised_delivery_at",
+  "date_livree": "delivered_at",
+  "etat": "status",
+  "transporteur": "carrier"
+}

@@ -1,0 +1,47 @@
+name: Checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.10-bookworm
+        env:
+          POSTGRES_USER: deliveryguard
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: deliveryguard_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U deliveryguard -d deliveryguard_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DG_TEST_DATABASE_URL: postgresql+psycopg://deliveryguard:ci-only@127.0.0.1:5432/deliveryguard_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements-dev.txt && pip install --no-deps -e .
+      - run: ruff check . && ruff format --check .
+      - run: pytest -q
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-dev.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: docker compose --env-file .env.demo up --build -d --wait
+      - run: python scripts/browser_check.py
+      - if: always()
+        run: docker compose --env-file .env.demo logs --no-color
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-evidence
+          path: artifacts/

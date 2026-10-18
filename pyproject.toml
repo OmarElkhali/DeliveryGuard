@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deliveryguard"
+version = "0.1.0"
+description = "Self-hosted delivery data quality and delay risk pilot"
+requires-python = ">=3.12,<3.13"
+authors = [{name = "Omar Elkhali"}]
+license = "MIT"
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = "requirements.txt"}
+
+[tool.setuptools.packages.find]
+include = ["deliveryguard*"]
+
+[project.scripts]
+deliveryguard = "deliveryguard.cli:main"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]  # Let the formatter wrap code; preserve readable UI strings.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

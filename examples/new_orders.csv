@@ -1,0 +1,3 @@
+order_id,ordered_at,promised_delivery_at,carrier,destination_zone
+NEW-001,2026-01-01T10:00:00Z,2026-01-03T10:00:00Z,Régional,Rural
+NEW-002,2026-01-01T11:00:00Z,2026-01-04T11:00:00Z,Atlas,Centre

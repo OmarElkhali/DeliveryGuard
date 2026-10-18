@@ -1,0 +1,14 @@
+*
+!requirements.txt
+!pyproject.toml
+!deliveryguard/
+!deliveryguard/*.py
+!ui/
+!ui/*.py
+!migrations/
+!migrations/*.py
+!migrations/versions/
+!migrations/versions/*.py
+!alembic.ini
+!.streamlit/
+!.streamlit/config.toml

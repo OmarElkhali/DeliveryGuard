@@ -1,0 +1,64 @@
+name: deliveryguard
+x-app: &app
+  build: .
+  image: deliveryguard:0.1.0
+  environment: &environment
+    DG_DATABASE_URL: postgresql+psycopg://deliveryguard:${DG_DB_PASSWORD:?Set DG_DB_PASSWORD}@db:5432/deliveryguard
+    DG_DATA_DIR: /app/data
+    DG_DEMO: ${DG_DEMO:-false}
+    DG_API_KEY: ${DG_API_KEY:-}
+    DG_API_URL: http://api:8000
+  volumes:
+    - app_data:/app/data
+  restart: unless-stopped
+services:
+  db:
+    image: postgres:16.10-bookworm
+    environment:
+      POSTGRES_DB: deliveryguard
+      POSTGRES_USER: deliveryguard
+      POSTGRES_PASSWORD: ${DG_DB_PASSWORD:?Set DG_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U deliveryguard -d deliveryguard"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  migrate:
+    <<: *app
+    command: [deliveryguard, migrate]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:${DG_API_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  worker:
+    <<: *app
+    command: [deliveryguard, worker]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+  ui:
+    <<: *app
+    command: [streamlit, run, ui/app.py, --server.address=0.0.0.0, --server.port=8501]
+    ports:
+      - "127.0.0.1:${DG_UI_PORT:-8501}:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+volumes:
+  postgres_data:
+  app_data:
