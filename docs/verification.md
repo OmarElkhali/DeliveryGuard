@@ -8,8 +8,9 @@ commerciale, ni une adoption, ni une maturité de production.
 
 Les contrôles suivants portent sur les instantanés initiaux, baselines, cache,
 diagnostics et restrictions de démo ajoutés après la publication initiale.
-Les vérifications de sauvegarde/restauration plus bas décrivent la version initiale ;
-elles n'ont pas été rejouées sur la révision `0002`.
+Les restaurations de la version initiale restent décrites plus bas. Le contrôle
+supplémentaire du schéma `0002` est désormais exécuté et détaillé dans la section
+[Sauvegarde et restauration du schéma 0002](#sauvegarde-et-restauration-du-schéma-0002).
 
 | Contrôle | Résultat réel |
 |---|---|
@@ -52,6 +53,65 @@ modifier ni filtrer l'exigence de zéro erreur console. Les liens Markdown, ancr
 images locales et l'encodage UTF-8 des deux README ont également été contrôlés.
 L'ouverture visuelle de github.com dans le navigateur local est restée bloquée
 par le DNS ; elle n'est pas présentée comme une vérification réussie du rendu distant.
+
+## Sauvegarde et restauration du schéma 0002
+
+Contrôle local exécuté le **18 octobre 2026**, sur le code `61717e2` et les mêmes
+images Docker : PostgreSQL **16.10**, Python **3.12.12**. La source est le projet
+`deliveryguard-review` sur 8005/8505. Le projet neuf `deliveryguard-restore-0002`
+utilise d'autres volumes et les ports 8006/8506. La démonstration initiale sur
+8000/8501 n'a été ni migrée ni modifiée par ce contrôle.
+
+Avant sauvegarde, les 1 500 commandes et leurs variables initiales ont été
+comparées au générateur déterministe : données entièrement synthétiques, graine 42.
+La source est à la révision `0002`, sans entraînement queued/running. Les services
+UI/API/worker ont été arrêtés pendant `pg_dump -Fc` et l'archive des répertoires
+`imports/` et `models/`, puis redémarrés. Leurs volumes n'ont pas été supprimés.
+
+La cible était vide avant `pg_restore --exit-on-error`. Les fichiers ont été
+extraits avec `tarfile` et `filter='data'`, puis migration/API/worker/UI ont été
+démarrés. L'API source et l'API restaurée utilisent exactement la même image
+`sha256:d63c912b5c3e91c31031269ef435d2a14d086457f0d0bdf16ef1faea87add230`.
+
+| Contrôle après restauration | Résultat réel |
+|---|---|
+| Révision Alembic et disponibilité API | `0002`, readiness passée |
+| Commandes et instantanés initiaux | **1 500 / 1 500**, contenu identique |
+| Reçus, entraînements, modèle actif | **1 reçu, 2 entraînements, 1 version active**, métadonnées identiques |
+| Empreintes de toutes les lignes des cinq tables applicatives | identiques, dont JSON initiaux et indicateurs d'exclusion |
+| Fichiers des répertoires imports/models | **6 fichiers**, SHA-256 identiques à la source et à l'archive |
+| Export CSV des commandes | même SHA-256, y compris colonnes `initial_*` et éligibilité |
+| Prédiction HTTP et version active | réponse JSON strictement identique, version `18e67283-65a7-458a-9a4b-d04beea77865` |
+| Fonction et trigger PostgreSQL | définitions identiques et trigger actif |
+| Modification opérationnelle sur la copie restaurée | instantané initial conservé |
+| Remplacement direct de l'instantané / annulation d'une exclusion | refusés par PostgreSQL, SQLSTATE `P0001` |
+| Écritures des essais SQL | rollback intégral ; empreintes de la base inchangées |
+| Navigateur sur la copie restaurée | calcul et téléchargement de **2 classements**, bonne version, **0 erreur console/page** |
+| Relecture finale de la source | export, reçus, rapports et prédiction toujours identiques à l'état sauvegardé |
+
+Le dump fait **72 699 octets**, l'archive des fichiers **299 156 octets**. Ils restent
+dans `backups/schema-0002-20261018-204314/`, hors Git. Les preuves locales restent
+dans `artifacts/restore-0002-result.json`, `restore-0002-api-result.json`,
+`restore-0002-browser-result.json` et `restore-0002-prediction.png`, également ignorées.
+La cible de contrôle est arrêtée après vérification, avec ses volumes conservés.
+
+Le contrôle reproductible `scripts/check_persistence.py` compare désormais aussi
+l'export complet et les métadonnées des reçus/modèles. Pour l'utiliser sur deux
+instances synthétiques, enregistrer avant la sauvegarde, puis vérifier après
+restauration sans import, entraînement ou activation intermédiaire :
+
+```powershell
+$env:DG_API_URL='http://127.0.0.1:8005'
+..\.venv\Scripts\python.exe scripts/check_persistence.py record
+# Sauvegarder et restaurer vers un projet neuf suivant docs/operations.md.
+$env:DG_API_URL='http://127.0.0.1:8006'
+..\.venv\Scripts\python.exe scripts/check_persistence.py verify
+```
+
+Les détails opératoires sont dans [le guide de sauvegarde/restauration](operations.md#backup-and-restoration).
+Ce contrôle valide la restauration de cette démonstration au schéma `0002` ; il
+ne constitue pas un exercice de reprise sur une infrastructure d'entreprise ni
+une mesure de RPO/RTO. Il ne valide pas Power BI Desktop ou des données réelles.
 
 ## Environnement de la vérification initiale
 

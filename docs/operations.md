@@ -103,7 +103,7 @@ after copying to avoid wasting private-volume space.
 Restore to an **empty, isolated Compose project** with matching dependency pins:
 
 1. Start only `db`; copy the dump with `docker compose ... cp backups/deliveryguard.dump db:/tmp/restore.dump`.
-2. Restore with `docker compose ... exec -T db pg_restore -U deliveryguard -d deliveryguard --clean --if-exists /tmp/restore.dump`.
+2. Verify that the target application's schema is empty, then restore with `docker compose ... exec -T db pg_restore -U deliveryguard -d deliveryguard --exit-on-error /tmp/restore.dump`. Do not restore over a running or populated instance.
 3. Copy `files.tar.gz` into the new private volume with a one-off trusted container,
    then extract it into `/app/data` as the app user. Only extract your own trusted
    archive; review members first. Keep the `imports/` and `models/` paths unchanged.
@@ -111,15 +111,19 @@ Restore to an **empty, isolated Compose project** with matching dependency pins:
    active version and a saved known prediction before reconnecting integrations.
 5. Keep the original backup intact until restoration has been independently verified.
 
-The following isolated **synthetic demo** restoration was executed locally. The
-original project remains on 8000/8501; the restored instance uses 8004/8504. Do not
-reuse a non-empty restoration project or point this at company volumes.
+For an isolated **synthetic demo** restoration, the recipe below uses 8004/8504
+while the original project uses 8000/8501. Verify that the new target has no public
+application tables before restoring; do not reuse a non-empty restoration project
+or point this at company volumes. The first exercise predates schema `0002`.
+A new `0002` restoration was also
+executed from `deliveryguard-review` (8005/8505) into a fresh project named
+`deliveryguard-restore-0002` (8006/8506); see [its measured results](verification.md#sauvegarde-et-restauration-du-schéma-0002).
 
 ```sh
 export DG_API_PORT=8004 DG_UI_PORT=8504
 docker compose -p deliveryguard-restore --env-file .env.demo up -d --wait db
 docker compose -p deliveryguard-restore --env-file .env.demo cp backups/deliveryguard.dump db:/tmp/restore.dump
-docker compose -p deliveryguard-restore --env-file .env.demo exec -T db pg_restore -U deliveryguard -d deliveryguard --clean --if-exists /tmp/restore.dump
+docker compose -p deliveryguard-restore --env-file .env.demo exec -T db pg_restore -U deliveryguard -d deliveryguard --exit-on-error /tmp/restore.dump
 docker compose -p deliveryguard-restore --env-file .env.demo create api
 docker compose -p deliveryguard-restore --env-file .env.demo cp backups/files.tar.gz api:/app/data/restore.tar.gz
 docker compose -p deliveryguard-restore --env-file .env.demo run --rm --no-deps -T api python -c "import tarfile; t=tarfile.open('/app/data/restore.tar.gz'); t.extractall('/app/data',filter='data'); t.close()"

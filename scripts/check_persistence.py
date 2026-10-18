@@ -1,6 +1,7 @@
-"""Snapshot/compare live synthetic instance across a real service restart."""
+"""Compare live synthetic instances after restart or isolated restoration."""
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -35,23 +36,30 @@ def main():
             "promised_delivery_at": "2025-01-03",
         },
     )
+    exported = client.get(config.api_url + "/exports/orders.csv", timeout=30)
+    exported.raise_for_status()
     snapshot = {
         "counts": summary["counts"],
         "total": summary["total"],
         "model_id": active["id"],
         "prediction": prediction,
+        "orders_export_sha256": hashlib.sha256(exported.content).hexdigest(),
+        "imports": call("GET", "/imports"),
+        "models": models,
     }
     path = Path("artifacts/persistence-before.json")
     path.parent.mkdir(exist_ok=True)
     if args.operation == "record":
         path.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
-        print("Recorded synthetic counts, active version and prediction. Restart services now.")
+        print("Recorded synthetic orders export, receipts, model reports and prediction.")
     else:
         assert snapshot == json.loads(path.read_text(encoding="utf-8")), "Persistence changed"
         Path("artifacts/persistence-result.json").write_text(
             json.dumps({"status": "passed", **snapshot}, indent=2), encoding="utf-8"
         )
-        print("PASS: counts, active model ID and exact prediction preserved after restart")
+        print(
+            "PASS: counts, order snapshots/export, receipts, model reports and exact prediction match"
+        )
 
 
 if __name__ == "__main__":
