@@ -109,7 +109,11 @@ verify`. Ne lancer ni nouvel entraînement/activation ni import entre les deux.
 
 ## Preuves visuelles et limites de vérification
 
-[Six captures réelles](screenshots/) et [capture animée GIF réelle](demo.gif).
+[Huit captures réelles](screenshots/), [cinq graphiques de résultats](results/) et
+[capture animée GIF réelle](demo.gif). Les graphiques reposent sur
+`results/synthetic-evaluation.json` ; `scripts/build_report.py` vérifie les champs
+de la base contre le générateur synthétique avant de capturer un nouveau snapshot.
+L'option `--snapshot` régénère les graphiques sans dépendre de l'API locale.
 Le téléchargement de Chromium/FFmpeg a échoué (timeouts, DNS/ECONNRESET) ; le
 contrôle a utilisé Chrome installé et son screencast CDP, encodé en GIF avec Pillow.
 Aucune vidéo WebM n'est revendiquée. Les CSV téléchargés et résultats JSON détaillés
@@ -119,8 +123,11 @@ locaux sont sous `artifacts/`, volontairement hors Git, dont
 ignoré. La GIF et les PNG finaux montrent l'instance Docker et ne contiennent que
 la démonstration synthétique.
 
-GitHub Actions est fourni mais n'a pas été exécuté sur GitHub. Power BI Desktop,
+Les exécutions hébergées sont consultables dans
+[GitHub Actions](https://github.com/OmarElkhali/DeliveryGuard/actions).
+Les résultats détaillés ci-dessus décrivent les contrôles locaux datés, distincts
+du statut CI courant affiché dans les README. Power BI Desktop,
 la connexion d'une vraie entreprise, HTTPS/reverse proxy, charge, tests de sécurité
 indépendants et déploiement public ne sont pas validés. Les restaurations native
 et Docker ont été réellement vérifiées ; cela ne mesure pas un RPO/RTO d'entreprise.
-Aucun push Git ni publication externe n'a été effectué.
+Ces contrôles locaux ont précédé la publication initiale du dépôt.

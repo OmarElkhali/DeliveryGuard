@@ -1,0 +1,313 @@
+{
+  "origin": "Synthetic DeliveryGuard generator, 1500 rows, seed 42; source equality verified",
+  "captured_at": "2026-10-18T15:40:27.767368+00:00",
+  "generator_sha256": "cfa07c872ea7e14d1b669056c71aa826407dc01c85db4807c4e13c9d36162863",
+  "orders": 1500,
+  "counts": {
+    "open": 84,
+    "cancelled": 40,
+    "delivered": 1376
+  },
+  "observed": 1376,
+  "late": 397,
+  "late_rate": 0.28851744186046513,
+  "run_id": "7af27c9c-8a80-458b-a74f-1bd88bf97cab",
+  "run_created_at": "2026-10-18T15:23:04.428158Z",
+  "report": {
+    "activation_allowed": true,
+    "activation_reason": "Évaluation valable; revue humaine requise",
+    "selected": "forest_depth5",
+    "threshold": 0.2,
+    "selection": "Maximum average precision sur validation; seuil F1 sur validation; sans refit",
+    "features": [
+      "promise_hours",
+      "order_hour",
+      "order_weekday",
+      "order_month",
+      "weight_kg",
+      "order_amount",
+      "carrier",
+      "destination_zone",
+      "product_category"
+    ],
+    "candidates": [
+      {
+        "name": "dummy",
+        "validation_average_precision": 0.3143939393939394,
+        "parameters": {
+          "constant": null,
+          "random_state": null,
+          "strategy": "prior"
+        }
+      },
+      {
+        "name": "logistic_C0.1",
+        "validation_average_precision": 0.7377841545477624,
+        "parameters": {
+          "C": 0.1,
+          "class_weight": null,
+          "dual": false,
+          "fit_intercept": true,
+          "intercept_scaling": 1,
+          "l1_ratio": 0.0,
+          "max_iter": 1000,
+          "n_jobs": null,
+          "penalty": "deprecated",
+          "random_state": 42,
+          "solver": "lbfgs",
+          "tol": 0.0001,
+          "verbose": 0,
+          "warm_start": false
+        }
+      },
+      {
+        "name": "logistic_C1",
+        "validation_average_precision": 0.737643238390558,
+        "parameters": {
+          "C": 1,
+          "class_weight": null,
+          "dual": false,
+          "fit_intercept": true,
+          "intercept_scaling": 1,
+          "l1_ratio": 0.0,
+          "max_iter": 1000,
+          "n_jobs": null,
+          "penalty": "deprecated",
+          "random_state": 42,
+          "solver": "lbfgs",
+          "tol": 0.0001,
+          "verbose": 0,
+          "warm_start": false
+        }
+      },
+      {
+        "name": "forest_depth5",
+        "validation_average_precision": 0.7383494936102295,
+        "parameters": {
+          "bootstrap": true,
+          "ccp_alpha": 0.0,
+          "class_weight": null,
+          "criterion": "gini",
+          "max_depth": 5,
+          "max_features": "sqrt",
+          "max_leaf_nodes": null,
+          "max_samples": null,
+          "min_impurity_decrease": 0.0,
+          "min_samples_leaf": 5,
+          "min_samples_split": 2,
+          "min_weight_fraction_leaf": 0.0,
+          "monotonic_cst": null,
+          "n_estimators": 100,
+          "n_jobs": 1,
+          "oob_score": false,
+          "random_state": 42,
+          "verbose": 0,
+          "warm_start": false
+        }
+      },
+      {
+        "name": "forest_depth10",
+        "validation_average_precision": 0.7200562411557772,
+        "parameters": {
+          "bootstrap": true,
+          "ccp_alpha": 0.0,
+          "class_weight": null,
+          "criterion": "gini",
+          "max_depth": 10,
+          "max_features": "sqrt",
+          "max_leaf_nodes": null,
+          "max_samples": null,
+          "min_impurity_decrease": 0.0,
+          "min_samples_leaf": 5,
+          "min_samples_split": 2,
+          "min_weight_fraction_leaf": 0.0,
+          "monotonic_cst": null,
+          "n_estimators": 100,
+          "n_jobs": 1,
+          "oob_score": false,
+          "random_state": 42,
+          "verbose": 0,
+          "warm_start": false
+        }
+      }
+    ],
+    "splits": {
+      "train": {
+        "n": 815,
+        "late": 221,
+        "late_rate": 0.27116564417177913,
+        "ordered_from": "2024-01-01T00:00:00+00:00",
+        "ordered_until": "2024-08-08T12:00:00+00:00",
+        "latest_outcome": "2024-08-09T07:00:00+00:00"
+      },
+      "validation": {
+        "n": 264,
+        "late": 83,
+        "late_rate": 0.3143939393939394,
+        "ordered_from": "2024-08-09T18:00:00+00:00",
+        "ordered_until": "2024-10-26T06:00:00+00:00",
+        "latest_outcome": "2024-10-26T18:00:00+00:00"
+      },
+      "test": {
+        "n": 276,
+        "late": 83,
+        "late_rate": 0.3007246376811594,
+        "ordered_from": "2024-10-27T00:00:00+00:00",
+        "ordered_until": "2025-01-09T18:00:00+00:00",
+        "latest_outcome": "2025-01-14T18:00:00+00:00"
+      },
+      "purged_unavailable_outcomes": 21
+    },
+    "validation": {
+      "precision": 0.55,
+      "recall": 0.927710843373494,
+      "f1": 0.6905829596412556,
+      "average_precision": 0.7383494936102295,
+      "roc_auc": 0.8588830459961392,
+      "confusion_matrix": [
+        [
+          118,
+          63
+        ],
+        [
+          6,
+          77
+        ]
+      ]
+    },
+    "test": {
+      "precision": 0.4968152866242038,
+      "recall": 0.9397590361445783,
+      "f1": 0.65,
+      "average_precision": 0.6522355973049151,
+      "roc_auc": 0.8292028216492915,
+      "confusion_matrix": [
+        [
+          114,
+          79
+        ],
+        [
+          5,
+          78
+        ]
+      ]
+    },
+    "baseline": {
+      "validation": {
+        "precision": 0.3143939393939394,
+        "recall": 1.0,
+        "f1": 0.4783861671469741,
+        "average_precision": 0.3143939393939394,
+        "roc_auc": 0.5,
+        "confusion_matrix": [
+          [
+            0,
+            181
+          ],
+          [
+            0,
+            83
+          ]
+        ]
+      },
+      "test": {
+        "precision": 0.3007246376811594,
+        "recall": 1.0,
+        "f1": 0.4623955431754875,
+        "average_precision": 0.3007246376811594,
+        "roc_auc": 0.5,
+        "confusion_matrix": [
+          [
+            0,
+            193
+          ],
+          [
+            0,
+            83
+          ]
+        ]
+      }
+    },
+    "associations": [
+      {
+        "feature": "promise_hours",
+        "mean": 0.006791525577541591,
+        "std": 0.0026119993744717455
+      },
+      {
+        "feature": "order_hour",
+        "mean": -0.010126048829910786,
+        "std": 0.006198479476767405
+      },
+      {
+        "feature": "order_weekday",
+        "mean": -0.004779471383151897,
+        "std": 0.001144349112727771
+      },
+      {
+        "feature": "order_month",
+        "mean": 0.0,
+        "std": 0.0
+      },
+      {
+        "feature": "weight_kg",
+        "mean": 0.022823929613156674,
+        "std": 0.006384966121082415
+      },
+      {
+        "feature": "order_amount",
+        "mean": -0.010629927737777786,
+        "std": 0.011446848542400887
+      },
+      {
+        "feature": "carrier",
+        "mean": 0.24080765497277956,
+        "std": 0.008614659960908867
+      },
+      {
+        "feature": "destination_zone",
+        "mean": 0.18397594656343977,
+        "std": 0.00691396386235473
+      },
+      {
+        "feature": "product_category",
+        "mean": 0.006119619603453974,
+        "std": 0.006428489072596899
+      }
+    ],
+    "dataset_sha256": "d7b91f154dacd2820f24eca4fe153ab8176550e6db32eea8c2edf48e36d615ba",
+    "artifact_sha256": "dd603a2b10bd7215f1faf5c0e504d11d1fc95c714f4021d4a0e5243ec61a8b23",
+    "dependencies": {
+      "scikit-learn": "1.9.1",
+      "pandas": "3.0.6",
+      "numpy": "2.5.4",
+      "joblib": "1.6.0"
+    },
+    "python": "3.12.12",
+    "seed": 42,
+    "limitations": [
+      "Score non calibré",
+      "Associations, jamais causalité",
+      "Biais des commandes non terminées et annulées",
+      "Aucun engagement de performance sur données réelles",
+      "Carrier/zone/catégorie doivent être connus au moment de la commande"
+    ]
+  },
+  "example_predictions": {
+    "model_id": "7af27c9c-8a80-458b-a74f-1bd88bf97cab",
+    "threshold": 0.2,
+    "score_note": "Score non calibré; ce n'est pas une probabilité garantie.",
+    "predictions": [
+      {
+        "order_id": "NEW-001",
+        "risk_score": 0.5661993410356936,
+        "risk_label": "À examiner"
+      },
+      {
+        "order_id": "NEW-002",
+        "risk_score": 0.07493233582391899,
+        "risk_label": "Priorité moindre"
+      }
+    ]
+  }
+}
