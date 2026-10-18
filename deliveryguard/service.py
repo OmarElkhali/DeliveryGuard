@@ -2,15 +2,17 @@ import hashlib
 import importlib.metadata
 import io
 import json
+import re
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
-from sqlalchemy import func, select, text
+from sqlalchemy import DateTime, func, select, text
 
 from deliveryguard.config import settings
 from deliveryguard.db import ActiveModel, Import, Order, Run, session, uid
-from deliveryguard.quality import DomainError, audit, csv_bytes, read_csv, report
+from deliveryguard.quality import FIELDS, DomainError, NewOrder, audit, csv_bytes, read_csv, report
 
 
 def lock(db):
@@ -27,11 +29,36 @@ def private_file(relative, content):
     return path
 
 
-def import_csv(raw, mapping=None, update=False, preview=False):
+def import_csv(raw, mapping=None, update=False, preview=False, correction_code=""):
     rows = read_csv(raw, mapping)
+    if correction_code and (
+        not update or not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", correction_code)
+    ):
+        raise DomainError(
+            "invalid_correction",
+            "Correction : activer update et fournir un code A-Z/0-9/_ (3 à 64 caractères)",
+        )
+    if settings().demo:
+        from deliveryguard.synthetic import generate
+
+        fixture = generate().replace(b"\r\n", b"\n")
+        if (
+            raw.removeprefix(b"\xef\xbb\xbf").replace(b"\r\n", b"\n") != fixture
+            or (mapping and any(source != target for source, target in mapping.items()))
+            or update
+            or correction_code
+        ):
+            raise DomainError(
+                "demo_import_restricted",
+                "La démo accepte uniquement le CSV synthétique fourni, sans mise à jour",
+                403,
+            )
     accepted, rejected = audit(rows)
     fingerprint = hashlib.sha256(
-        raw + json.dumps([mapping, update], sort_keys=True).encode()
+        raw
+        + json.dumps(
+            [mapping, update, correction_code, "initial_snapshot_v1"], sort_keys=True
+        ).encode()
     ).hexdigest()
     with session() as db, db.begin():
         lock(db)
@@ -46,22 +73,45 @@ def import_csv(raw, mapping=None, update=False, preview=False):
             if existing:
                 before = order_dict(existing)
                 if before == values:
-                    unchanged += 1
+                    if (
+                        correction_code
+                        and not existing.snapshot_excluded
+                        and existing.initial_snapshot != initial_values(values)
+                    ):
+                        updated += 1
+                    else:
+                        unchanged += 1
                 elif not update:
                     code = "conflict"
                 elif before["ordered_at"] != values["ordered_at"]:
                     code = "immutable_order_date"
-                elif before["status"] != "open" and before["status"] != values["status"]:
+                elif (
+                    not correction_code
+                    and before["status"] != "open"
+                    and (
+                        before["status"] != values["status"]
+                        or before["delivered_at"] != values["delivered_at"]
+                    )
+                ):
                     code = "terminal_status"
                 else:
                     updated += 1
                     if not preview:
                         for key, value in values.items():
                             setattr(existing, key, value)
+                # Corrections never rewrite the original evidence, including an unchanged
+                # current row that explicitly disclaims its original feature values.
+                if (
+                    not code
+                    and not preview
+                    and correction_code
+                    and existing.initial_snapshot != initial_values(values)
+                ):
+                    existing.snapshot_excluded = True
             else:
                 inserted += 1
                 if not preview:
-                    db.add(Order(**values))
+                    db.add(Order(**values, initial_snapshot=initial_values(values)))
             if code:
                 rejected.append(
                     {"row": line, "code": code, "reason": code, "values": rows[line - 2]}
@@ -76,6 +126,13 @@ def import_csv(raw, mapping=None, update=False, preview=False):
             updated=updated,
             unchanged=unchanged,
             preview=preview,
+        )
+        quality.update(
+            update_kind="correction" if correction_code else "operational",
+            correction_code=correction_code,
+        )
+        quality["warnings"].append(
+            "Les champs initiaux doivent provenir de la commande, pas d'un historique révisé. Les mises à jour ne remplacent jamais cet instantané."
         )
         if preview:
             return quality
@@ -98,43 +155,77 @@ def import_csv(raw, mapping=None, update=False, preview=False):
 
 
 def order_dict(order):
-    return {c.name: getattr(order, c.name) for c in Order.__table__.columns}
+    return {name: getattr(order, name) for name in FIELDS}
 
 
-def orders_frame(db):
-    return pd.DataFrame(
-        [order_dict(o) for o in db.scalars(select(Order))],
-        columns=[c.name for c in Order.__table__.columns],
-    )
+def initial_values(values):
+    return NewOrder.model_validate(
+        {k: v for k, v in values.items() if k in NewOrder.model_fields}
+    ).model_dump(mode="json")
+
+
+def orders_frame(db, training=False):
+    orders = list(db.scalars(select(Order).order_by(Order.ordered_at, Order.order_id)))
+    rows = []
+    for order in orders:
+        row = order_dict(order)
+        if training:
+            if not order.initial_snapshot or order.snapshot_excluded:
+                continue
+            row.update(order.initial_snapshot)
+        rows.append(row)
+    frame = pd.DataFrame(rows, columns=FIELDS)
+    frame.attrs["excluded_missing_or_corrected_snapshot"] = len(orders) - len(rows)
+    return frame
+
+
+def initial_snapshot(order_id):
+    with session() as db:
+        order = db.get(Order, order_id)
+        if not order:
+            raise DomainError("not_found", "Commande introuvable", 404)
+        return {
+            "values": order.initial_snapshot,
+            "eligible": bool(order.initial_snapshot and not order.snapshot_excluded),
+        }
 
 
 def summary():
     with session() as db:
+        initial_promise = (
+            Order.initial_snapshot["promised_delivery_at"].as_string().cast(DateTime(timezone=True))
+        )
+        eligible = Order.initial_snapshot.is_not(None) & ~Order.snapshot_excluded
+        initial_carrier = Order.initial_snapshot["carrier"].as_string()
         # SQL aggregates count only observed deliveries in the lateness denominator.
         counts = dict(db.execute(select(Order.status, func.count()).group_by(Order.status)).all())
         late = db.scalar(
             select(func.count())
             .select_from(Order)
-            .where(Order.status == "delivered", Order.delivered_at > Order.promised_delivery_at)
+            .where(eligible, Order.status == "delivered", Order.delivered_at > initial_promise)
+        )
+        observed = db.scalar(
+            select(func.count()).select_from(Order).where(eligible, Order.status == "delivered")
         )
         open_orders = list(db.scalars(select(Order).where(Order.status == "open")))
         overdue = [order_dict(o) for o in open_orders if o.promised_delivery_at < datetime.now(UTC)]
         grouped = db.execute(
-            select(Order.carrier, func.count())
-            .where(Order.status == "delivered", Order.delivered_at > Order.promised_delivery_at)
-            .group_by(Order.carrier)
+            select(initial_carrier, func.count())
+            .where(eligible, Order.status == "delivered", Order.delivered_at > initial_promise)
+            .group_by(initial_carrier)
         ).all()
         return {
             "counts": counts,
             "total": sum(counts.values()),
-            "observed": counts.get("delivered", 0),
+            "observed": observed,
+            "excluded_outcomes": counts.get("delivered", 0) - observed,
             "late": late,
-            "late_rate": late / counts["delivered"] if counts.get("delivered") else None,
+            "late_rate": late / observed if observed else None,
             "overdue_count": len(overdue),
             "overdue": overdue,
             "late_by_carrier": [{"carrier": c or "Non renseigné", "late": n} for c, n in grouped],
             "as_of": datetime.now(UTC).isoformat(),
-            "warning": "Alertes constatées ≠ scores ML. Issues ouvertes/annulées exclues du taux.",
+            "warning": "Retards mesurés contre la promesse initiale; instantanés absents/corrigés exclus du taux et du ML. Alertes ouvertes contre la promesse opérationnelle actuelle.",
         }
 
 
@@ -204,18 +295,30 @@ def activate(run_id, confirmed):
         run = db.get(Run, run_id)
         if not run:
             raise DomainError("not_found", "Modèle introuvable", 404)
-        if run.status != "succeeded" or not run.report.get("activation_allowed"):
+        if (
+            run.status != "succeeded"
+            or not run.report.get("activation_allowed")
+            or run.report.get("snapshot_policy") != "initial_v1"
+        ):
             raise DomainError(
                 "activation_blocked", "Évaluation non valable ou entraînement inachevé", 409
             )
         model_bytes(run)
         db.merge(ActiveModel(id=1, run_id=run.id, confirmed=True))
+    loaded_model.cache_clear()
     return {"id": run_id, "active": True}
 
 
-def predict(orders):
+@lru_cache(maxsize=2)
+def loaded_model(path, modified_ns, size, run_id, digest, dependencies):
     import joblib
 
+    # The cache key includes the active version, file stat and evaluation fingerprint.
+    run = Run(id=run_id, report={"artifact_sha256": digest, "dependencies": dict(dependencies)})
+    return joblib.load(io.BytesIO(model_bytes(run)))
+
+
+def predict(orders):
     from deliveryguard.ml import features
 
     with session() as db:
@@ -224,7 +327,21 @@ def predict(orders):
             raise DomainError("no_active_model", "Entraîner, évaluer puis activer un modèle", 409)
         run = db.get(Run, active.run_id)
         # Trusted, locally generated artifacts only. There is no model-upload endpoint.
-        model = joblib.load(io.BytesIO(model_bytes(run)))
+        if run.report.get("snapshot_policy") != "initial_v1":
+            raise DomainError("legacy_model", "Réentraîner avec les instantanés initiaux", 409)
+        path = settings().data_dir / "models" / f"{run.id}.joblib"
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            raise DomainError("artifact_missing", "Modèle local absent", 503) from None
+        model = loaded_model(
+            str(path.resolve()),
+            stat.st_mtime_ns,
+            stat.st_size,
+            run.id,
+            run.report["artifact_sha256"],
+            tuple(sorted(run.report["dependencies"].items())),
+        )
         scores = model.predict_proba(features(pd.DataFrame(orders)))[:, 1]
         threshold = run.report["threshold"]
         return {

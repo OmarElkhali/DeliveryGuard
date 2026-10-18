@@ -2,21 +2,23 @@
 
 All business endpoints require `X-API-Key` unless the instance is explicitly in
 local synthetic demo mode. Liveness and readiness are public and expose no rows.
-OpenAPI lives at `/openapi.json`, interactive reference at `/docs`. IDs are UUIDs.
+OpenAPI lives at `/openapi.json`, interactive reference at `/docs`.
+Import/run/model IDs are UUIDs; order IDs are source strings (128 characters maximum).
 Errors use `{ "error": { "code", "message", "details", "request_id" } }` and
 `X-Request-ID`. Validation errors omit raw input. Standard codes: 401 unauthorized,
-404 missing resource, 409 state conflict, 413 limit, 415 file type, 422 validation,
+403 restricted demo import, 404 missing resource, 409 state conflict, 413 limit, 415 file type, 422 validation,
 503 readiness/artifact unavailable. Unknown routes use the same structured shape.
 
 | Method | Route | Contract |
 |---|---|---|
 | GET | /health/live | process alive/version/demo flag |
 | GET | /health/ready | DB and migration available; model not required |
-| POST | /imports/preview | multipart CSV + mapping JSON string + update bool; no persistence |
+| POST | /imports/preview | multipart CSV + mapping JSON string + update bool + optional correction_code; no persistence |
 | POST | /imports | same multipart; 201 receipt, counters, examples, warnings |
 | GET | /imports | most recent 100 receipts |
 | GET | /imports/{id}/quality | persisted audit |
 | GET | /imports/{id}/rejected | rejected rows CSV |
+| GET | /orders/{order_id}/initial-snapshot | immutable order-time inputs and eligibility |
 | POST | /training-runs | no body; 202 persistent queued run, worker required |
 | GET | /training-runs/{id} | persistent state and report |
 | GET | /models | runs and active flag |
@@ -24,7 +26,7 @@ Errors use `{ "error": { "code", "message", "details", "request_id" } }` and
 | POST | /predict | one NewOrder, no outcome fields |
 | POST | /predict/batch | `{"orders":[NewOrder,...]}`, 1..1000 unique IDs |
 | GET | /analytics/summary | SQL counts, observed rate, operational overdue alerts |
-| GET | /exports/orders.csv | UTF-8 BOM, observed_late nullable for non-delivered |
+| GET | /exports/orders.csv | UTF-8 BOM, current fields, initial_* fields, eligibility and nullable observed_late |
 
 Predictions return `model_id`, `threshold`, `score_note`, and `predictions` sorted
 by decreasing risk score. Labels are “À examiner” / “Priorité moindre”. A low score
@@ -32,6 +34,15 @@ does not guarantee on-time delivery. Input does not have to already exist in DB;
 prediction requests themselves are not persisted. To monitor open orders over time,
 import them with `status=open`, and later reimport with `update=true` when delivered
 or cancelled. Monitoring alerts are derived from stored open orders.
+
+Operational imports preserve the initial promise and features. Explicit data
+corrections require `update=true` plus a non-personal `correction_code`, such as
+`STATUS_ERROR`; see [the snapshot/correction contract](data-contract.md#réimport-et-mise-à-jour).
+To reproduce an initial prediction for an existing order, retrieve its initial
+snapshot and submit those `values` to `/predict`; do not use revised current fields.
+Rows without eligible original inputs are excluded from ML and the initial delay
+rate. In demo mode, all history imports must exactly match the bundled synthetic
+fixture; arbitrary histories, updates and corrections are refused with HTTP 403.
 
 ## curl (POSIX shell; Windows use curl.exe and adapt quoting)
 

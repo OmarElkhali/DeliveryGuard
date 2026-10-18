@@ -51,6 +51,8 @@ class Order(Base):
     product_category: Mapped[str | None] = mapped_column(String(128))
     weight_kg: Mapped[float | None] = mapped_column(Float)
     order_amount: Mapped[float | None] = mapped_column(Float)
+    initial_snapshot: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
+    snapshot_excluded: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class Import(Base):

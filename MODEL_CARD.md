@@ -10,7 +10,7 @@ on them is a software check, not evidence of real-world utility.
 
 ## Target and admissible inputs
 
-Target: delivered_at > promised_delivery_at, among observable delivered orders only.
+Target: delivered_at > **initial** promised_delivery_at, among observable delivered orders only.
 Open and cancelled orders are excluded. Open overdue alerts are separate rules.
 Admissible features: promised lead time in hours, order hour/weekday/month (UTC),
 weight, amount, carrier, destination zone and product category. The last five must
@@ -20,6 +20,16 @@ Order IDs, status, delivery timestamp and derivatives of outcomes are never feat
 Carrier/category codes must not encode customer identity or future outcome.
 Schema validation alone cannot determine when a company's fields became available.
 No aggregate target encoding or features based on future delivery performance.
+
+At the first accepted import, all NewOrder fields are stored in an immutable
+`initial_snapshot`. PostgreSQL rejects changes to it. Later operational changes
+affect current columns only; training uses snapshot features with current observed
+outcomes. The first import must contain the actual original inputs: capturing a
+previously revised historical CSV cannot recover its past. Explicit corrections
+that contradict these inputs exclude the order, irreversibly, from future training
+and the original-promise delay rate. They never rewrite the original evidence.
+Legacy rows with no snapshot are excluded. Migration deactivates legacy models;
+their old metrics remain historical records, not eligible activation reports.
 
 ## Evaluation procedure
 
@@ -43,6 +53,9 @@ requires validation AP strictly above Dummy AP. Human review is always required.
 Reports show precision, recall, F1, average precision, confusion matrix
 [[TN,FP],[FN,TP]] and ROC-AUC if calculable; split counts, prevalence and periods;
 baseline validation/test metrics, all candidate hyperparameters and versions.
+Dummy selects its own threshold on the same validation grid, independently of the
+selected model. Constant all-on-time and all-late rules also have full metrics.
+The activation gate remains validation average precision, unaffected by thresholds.
 Raw `predict_proba` output is described only as an **uncalibrated risk score**.
 Permutation importance on validation (3 repeats) is association, never causality.
 

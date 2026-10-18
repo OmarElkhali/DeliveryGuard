@@ -1,6 +1,6 @@
 {
   "origin": "Synthetic DeliveryGuard generator, 1500 rows, seed 42; source equality verified",
-  "captured_at": "2026-10-18T15:40:27.767368+00:00",
+  "captured_at": "2026-10-18T16:31:21.206458+00:00",
   "generator_sha256": "cfa07c872ea7e14d1b669056c71aa826407dc01c85db4807c4e13c9d36162863",
   "orders": 1500,
   "counts": {
@@ -11,9 +11,10 @@
   "observed": 1376,
   "late": 397,
   "late_rate": 0.28851744186046513,
-  "run_id": "7af27c9c-8a80-458b-a74f-1bd88bf97cab",
-  "run_created_at": "2026-10-18T15:23:04.428158Z",
+  "run_id": "18e67283-65a7-458a-9a4b-d04beea77865",
+  "run_created_at": "2026-10-18T16:31:10.841991Z",
   "report": {
+    "snapshot_policy": "initial_v1",
     "activation_allowed": true,
     "activation_reason": "Évaluation valable; revue humaine requise",
     "selected": "forest_depth5",
@@ -156,7 +157,8 @@
         "ordered_until": "2025-01-09T18:00:00+00:00",
         "latest_outcome": "2025-01-14T18:00:00+00:00"
       },
-      "purged_unavailable_outcomes": 21
+      "purged_unavailable_outcomes": 21,
+      "excluded_missing_or_corrected_snapshot": 0
     },
     "validation": {
       "precision": 0.55,
@@ -193,6 +195,7 @@
       ]
     },
     "baseline": {
+      "threshold": 0.05,
       "validation": {
         "precision": 0.3143939393939394,
         "recall": 1.0,
@@ -226,6 +229,80 @@
             83
           ]
         ]
+      }
+    },
+    "constant_baselines": {
+      "all_on_time": {
+        "validation": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "average_precision": 0.3143939393939394,
+          "roc_auc": 0.5,
+          "confusion_matrix": [
+            [
+              181,
+              0
+            ],
+            [
+              83,
+              0
+            ]
+          ]
+        },
+        "test": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "average_precision": 0.3007246376811594,
+          "roc_auc": 0.5,
+          "confusion_matrix": [
+            [
+              193,
+              0
+            ],
+            [
+              83,
+              0
+            ]
+          ]
+        }
+      },
+      "all_late": {
+        "validation": {
+          "precision": 0.3143939393939394,
+          "recall": 1.0,
+          "f1": 0.4783861671469741,
+          "average_precision": 0.3143939393939394,
+          "roc_auc": 0.5,
+          "confusion_matrix": [
+            [
+              0,
+              181
+            ],
+            [
+              0,
+              83
+            ]
+          ]
+        },
+        "test": {
+          "precision": 0.3007246376811594,
+          "recall": 1.0,
+          "f1": 0.4623955431754875,
+          "average_precision": 0.3007246376811594,
+          "roc_auc": 0.5,
+          "confusion_matrix": [
+            [
+              0,
+              193
+            ],
+            [
+              0,
+              83
+            ]
+          ]
+        }
       }
     },
     "associations": [
@@ -275,7 +352,7 @@
         "std": 0.006428489072596899
       }
     ],
-    "dataset_sha256": "d7b91f154dacd2820f24eca4fe153ab8176550e6db32eea8c2edf48e36d615ba",
+    "dataset_sha256": "d18b916ff02a39371648124ae4d526c85ffba97efe595404e61ac50fa810bd9e",
     "artifact_sha256": "dd603a2b10bd7215f1faf5c0e504d11d1fc95c714f4021d4a0e5243ec61a8b23",
     "dependencies": {
       "scikit-learn": "1.9.1",
@@ -294,7 +371,7 @@
     ]
   },
   "example_predictions": {
-    "model_id": "7af27c9c-8a80-458b-a74f-1bd88bf97cab",
+    "model_id": "18e67283-65a7-458a-9a4b-d04beea77865",
     "threshold": 0.2,
     "score_note": "Score non calibré; ce n'est pas une probabilité garantie.",
     "predictions": [

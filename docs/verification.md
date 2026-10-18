@@ -4,7 +4,48 @@ Les résultats ci-dessous proviennent d'exécutions réelles sur cette machine, 
 des données **exclusivement synthétiques**. Ils ne prouvent ni une performance
 commerciale, ni une adoption, ni une maturité de production.
 
-## Environnement exécuté
+## Nouvelle vérification après les correctifs historiques
+
+Les contrôles suivants portent sur les instantanés initiaux, baselines, cache,
+diagnostics et restrictions de démo ajoutés après la publication initiale.
+Les vérifications de sauvegarde/restauration plus bas décrivent la version initiale ;
+elles n'ont pas été rejouées sur la révision `0002`.
+
+| Contrôle | Résultat réel |
+|---|---|
+| `ruff check .` et `ruff format --check .` | passés, 36 fichiers Python conformes |
+| `pytest -q` sur PostgreSQL réel | **32 passed**, 1 avertissement Starlette conservé, 14,35 s |
+| Mise à jour opérationnelle de tous les champs initiaux | même instantané, même frame ML, même prédiction initiale |
+| Promesse repoussée après commande | livraison toujours en retard contre la promesse initiale ; export cohérent |
+| Correction déclarée, preview et garde SQL | motif conservé ; preview sans effet ; instantané immuable ; exclusion irréversible |
+| Migration d'une base `0001` avec anciennes lignes/modèle actif | lignes conservées sans instantané inventé, ancien modèle désactivé et activation bloquée |
+| Comparaison des classifications | seuil Dummy propre 0,05 ; modèle 0,20 ; métriques des règles constantes enregistrées |
+| Cache du modèle | une désérialisation pour les prédictions répétées ; rechargement après activation/changement de pointeur ; corruption détectée |
+| Diagnostics API/worker | type/localisation + ID vérifiés ; chaînes métier/secrets injectées absentes des logs et réponses |
+| Démo sans clé | CSV arbitraire, fichier synthétique modifié et update refusés ; aucun fichier arbitraire conservé |
+| Compose sur volumes neufs `deliveryguard-review` | build, migrations et démarrage passés ; API 8005 / UI 8505 |
+| Parcours navigateur réel et téléchargements | passé, **0 erreur console/page** ; GIF réel et captures renouvelés |
+| Recréation des conteneurs avec volumes conservés | mêmes effectifs, version active et prédiction exacte |
+
+Cette instance de vérification est distincte de la démonstration initiale sur
+8000/8501, qui n'a pas été migrée ni effacée. Les tests de régression utilisent
+uniquement la base jetable `deliveryguard_test`. Pour rejouer le navigateur sur
+l'instance de vérification dans PowerShell :
+
+```powershell
+$env:DG_API_URL='http://127.0.0.1:8005'
+$env:DG_UI_URL='http://127.0.0.1:8505'
+$env:PW_CHANNEL='chrome'
+$env:PW_NO_VIDEO='1'
+..\.venv\Scripts\python.exe scripts/browser_check.py
+```
+
+Les captures comprennent désormais la comparaison réelle des trois baselines.
+Les prochains besoins restent une installation observée par une personne
+extérieure, un dataset réel autorisé et des identités/droits distincts. Aucun de
+ces points n'est présenté comme déjà réalisé.
+
+## Environnement de la vérification initiale
 
 - Windows/PowerShell, Python **3.12.3**, PostgreSQL **16.1** local, dépendances
   exactes dans `requirements.txt` et `requirements-dev.txt`.
@@ -109,7 +150,7 @@ verify`. Ne lancer ni nouvel entraînement/activation ni import entre les deux.
 
 ## Preuves visuelles et limites de vérification
 
-[Huit captures réelles](screenshots/), [cinq graphiques de résultats](results/) et
+[Neuf captures réelles](screenshots/), [cinq graphiques de résultats](results/) et
 [capture animée GIF réelle](demo.gif). Les graphiques reposent sur
 `results/synthetic-evaluation.json` ; `scripts/build_report.py` vérifie les champs
 de la base contre le générateur synthétique avant de capturer un nouveau snapshot.

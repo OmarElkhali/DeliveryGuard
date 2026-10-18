@@ -8,6 +8,14 @@ synthetic-only access and a public demonstration DB password. Never switch an
 existing demo volume into a company pilot. Create a new project/volumes and load
 only the company's approved data. PostgreSQL is not published by Compose.
 
+Demo imports are enforced server-side: only the bundled deterministic 1,500-row,
+seed-42 history is accepted, with no updates/corrections. Both headers and values
+must match the fixture (UTF-8 BOM and CRLF/LF differences are tolerated); renamed
+headers require company mode. This prevents arbitrary data hidden in mapped headers. Arbitrary
+CSV uploads are rejected without persistence. This does not provide session
+isolation, total storage quotas or public rate limiting; keep the shared demo
+local. Predictions are bounded, not persisted and remain unauthenticated in demo.
+
 Serve a real pilot behind an administrator-managed HTTPS reverse proxy and restrict
 network access. Configure proxy body limits, rate limits and timeouts consistently
 with the app's limits; preserve Streamlit WebSocket forwarding. Native servers
@@ -37,6 +45,38 @@ it does not require a model or assert that a worker is currently running. A run
 remaining queued means the worker is stopped/unavailable. After a crash, restarted
 workers mark running jobs failed; explicitly create a new run. Training errors are
 persisted with safe codes; no raw business data are logged.
+
+Unexpected failures also emit a structured `unexpected_error` record: exception
+type, cause type, validated PostgreSQL SQLSTATE when available, and source
+file/function/line locations, correlated by `request_id` for HTTP
+or `run_id` for training. Search API/worker logs using the ID shown in the response
+or training report. Exception messages, source text, local variables, SQL values,
+headers and raw tracebacks are deliberately omitted. Worker polling failures
+are logged as `operation=worker_poll` and retried on the next polling cycle.
+Readiness failures carry the request ID as well. Restrict log access and retention.
+
+Prediction caches hold at most two deserialized models per API process. Each
+request reads the active DB version and file stat; a version, digest, dependency
+manifest, modification time or size change causes integrity/version validation
+and reload. Activation clears the local cache; other processes see the new DB
+pointer on their next request. A cache hit does not reread the model file.
+
+## Upgrading from schema 0001
+
+Back up the DB and private files together before upgrading. Migration `0002` adds
+immutable initial snapshots, leaves legacy snapshots unknown, and removes the old
+active pointer. Legacy evaluation reports are retained but blocked for activation.
+The same Compose startup command runs the migration; do not roll application code
+back while keeping a newer schema. Downgrading does not restore an active version.
+
+Legacy orders remain available operationally but are excluded from training and
+the initial-promise delay rate. Reimporting identical IDs cannot manufacture their
+original snapshot. For historical migration, prepare a **separate empty instance**
+from an authorized source that still contains original order-time fields, verify
+it, then train/review/activate anew. Retain the previous instance and backups until
+that verification is complete. If original fields are lost, collect new orders
+at placement rather than claiming recovered history. Demo installations can use
+the same approach with a separate Compose project and the bundled synthetic CSV.
 
 ## Backup and restoration
 

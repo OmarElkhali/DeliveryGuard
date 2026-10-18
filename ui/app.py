@@ -40,7 +40,7 @@ st.sidebar.divider()
 st.sidebar.caption("Omar Elkhali · ENSAM Casablanca\n\nLes données restent sur cette instance.")
 if config.demo:
     st.warning(
-        "MODE DÉMONSTRATION — Données synthétiques uniquement. Ne chargez aucune donnée réelle."
+        "MODE DÉMONSTRATION — Seul le CSV synthétique fourni (1 500 lignes, graine 42) est accepté par le serveur. Aucune donnée réelle."
     )
 elif not key:
     st.title("DeliveryGuard")
@@ -61,6 +61,8 @@ def api(method, path, **kwargs):
                 message = f"{error['message']} ({error['code']})"
                 if error.get("details"):
                     message += " — " + str(error["details"])
+                if error.get("request_id"):
+                    message += " — Référence : " + error["request_id"]
             except (ValueError, KeyError):
                 message = f"Service indisponible (HTTP {response.status_code})"
             st.error(message)
@@ -144,19 +146,35 @@ elif page == "Import et mapping":
                 index=FIELDS.index(col) if col in FIELDS else 0,
                 key=f"map_{col}",
             )
-        update = st.checkbox("Autoriser le remplacement explicite des commandes existantes")
-        st.caption(
-            "Sans cette option, seules les nouvelles commandes et les lignes identiques sont acceptées. Une issue terminée ne peut pas redevenir ouverte."
+        update = st.checkbox(
+            "Autoriser les mises à jour opérationnelles des commandes existantes",
+            disabled=config.demo,
         )
+        correction_code = ""
+        if update and st.checkbox("Déclarer une correction de données"):
+            correction_code = st.text_input(
+                "Code du motif (A-Z, chiffres, underscore ; aucun texte personnel)"
+            )
+            if not correction_code:
+                st.info("Indiquez un code de correction avant de poursuivre.")
+                st.stop()
+        st.caption(
+            "L'instantané initial reste immuable. Les évolutions de promesse ou de transporteur modifient seulement l'état opérationnel. Une correction déclarée peut rectifier le statut ; si les variables initiales sont contestées, la commande est exclue du ML."
+        )
+        import_options = {
+            "mapping": json.dumps(mapping),
+            "update": str(update).lower(),
+            "correction_code": correction_code,
+        }
         token = hashlib.sha256(
-            raw + json.dumps([mapping, update], sort_keys=True).encode()
+            raw + json.dumps(import_options, sort_keys=True).encode()
         ).hexdigest()
         if st.button("Prévisualiser et auditer", type="primary"):
             result = api(
                 "POST",
                 "/imports/preview",
                 files={"file": ("history.csv", raw, "text/csv")},
-                data={"mapping": json.dumps(mapping), "update": str(update).lower()},
+                data=import_options,
             ).json()
             st.session_state["preview"] = (token, result)
         preview = st.session_state.get("preview")
@@ -175,7 +193,7 @@ elif page == "Import et mapping":
                     "POST",
                     "/imports",
                     files={"file": ("history.csv", raw, "text/csv")},
-                    data={"mapping": json.dumps(mapping), "update": str(update).lower()},
+                    data=import_options,
                 ).json()
                 st.session_state["import_id"] = result["id"]
                 if result["reused"]:
@@ -216,13 +234,17 @@ elif page == "Analyse des livraisons":
     else:
         cols = st.columns(4)
         cols[0].metric("Commandes", result["total"])
-        cols[1].metric("Livrées", result["observed"])
+        cols[1].metric("Livraisons évaluables", result["observed"])
         cols[2].metric("Retards observés", result["late"])
         cols[3].metric(
             "Taux parmi les livraisons",
             f"{result['late_rate']:.1%}" if result["late_rate"] is not None else "Non calculable",
         )
         st.caption(result["warning"])
+        if result["excluded_outcomes"]:
+            st.info(
+                f"{result['excluded_outcomes']} livraisons exclues du taux : instantané initial absent ou contesté."
+            )
         st.plotly_chart(
             px.bar(
                 pd.DataFrame([{"Statut": k, "Commandes": v} for k, v in result["counts"].items()]),
@@ -305,6 +327,26 @@ elif page == "Modèles et évaluation":
             )
             st.subheader("Périodes et effectifs")
             st.json(report["splits"])
+            if "constant_baselines" in report:
+                st.subheader("Baselines de classification")
+                st.caption(
+                    f"Dummy : seuil {report['baseline']['threshold']:.2f} choisi sur sa propre validation. Les deux règles constantes n'utilisent pas le seuil du modèle."
+                )
+                st.dataframe(
+                    [
+                        {
+                            "Règle": label,
+                            "F1 validation": values["validation"]["f1"],
+                            "F1 test final": values["test"]["f1"],
+                        }
+                        for label, values in [
+                            ("Dummy (seuil propre)", report["baseline"]),
+                            ("Toutes à l'heure", report["constant_baselines"]["all_on_time"]),
+                            ("Toutes en retard", report["constant_baselines"]["all_late"]),
+                        ]
+                    ],
+                    hide_index=True,
+                )
             st.subheader("Associations observées sur validation")
             st.caption("Importance par permutation; aucune interprétation causale.")
             st.dataframe(report["associations"], hide_index=True)

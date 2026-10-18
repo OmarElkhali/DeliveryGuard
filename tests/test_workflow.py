@@ -186,7 +186,12 @@ def test_no_leakage_temporal_split_and_single_class():
         split(oneclass)
 
 
-def test_full_training_activation_prediction_persistence(client):
+def test_full_training_activation_prediction_persistence(client, monkeypatch):
+    import joblib
+
+    from deliveryguard import service
+    from deliveryguard.db import session
+
     result = upload(client, generate()).json()
     assert result["valid"] == 1500 and result["rejected"] == 0
     queued = client.post("/training-runs").json()
@@ -195,6 +200,13 @@ def test_full_training_activation_prediction_persistence(client):
     assert run["status"] == "succeeded", run
     assert run["report"]["activation_allowed"]
     assert len(run["report"]["candidates"]) == 5
+    baseline = run["report"]["baseline"]
+    assert baseline["threshold"] != run["report"]["threshold"]
+    constants = run["report"]["constant_baselines"]
+    for period in ["validation", "test"]:
+        assert constants["all_on_time"][period]["recall"] == 0
+        assert constants["all_late"][period]["recall"] == 1
+        assert baseline[period]["f1"] == constants["all_late"][period]["f1"]
     assert (
         client.post(f"/models/{run['id']}/activate", json={"reviewed_limits": False}).status_code
         == 422
@@ -204,6 +216,14 @@ def test_full_training_activation_prediction_persistence(client):
         == 200
     )
     order = {"order_id": "N1", "ordered_at": "2025-01-01", "promised_delivery_at": "2025-01-03"}
+    real_load = joblib.load
+    loads = []
+
+    def counted_load(*args, **kwargs):
+        loads.append(True)
+        return real_load(*args, **kwargs)
+
+    monkeypatch.setattr(joblib, "load", counted_load)
     first = client.post("/predict", json=order).json()
     assert 0 <= first["predictions"][0]["risk_score"] <= 1
     orders = [order, {**order, "order_id": "N2", "carrier": "never-seen"}]
@@ -212,6 +232,48 @@ def test_full_training_activation_prediction_persistence(client):
     assert client.post("/predict", json={**order, "delivered_at": "2025-01-04"}).status_code == 422
     engine().dispose()
     assert client.post("/predict", json=order).json() == first
+    assert len(loads) == 1
+    # Operational edits cannot change the historical training inputs, target or
+    # prediction made from the original order-time snapshot.
+    with session() as db:
+        before_frame = service.orders_frame(db, training=True)
+    original = client.get("/orders/SYN-42-00000/initial-snapshot").json()["values"]
+    original_prediction = client.post("/predict", json=original).json()
+    changed = before_frame.iloc[0].to_dict()
+    changed.update(
+        promised_delivery_at="2025-12-01",
+        carrier="Reassigned",
+        destination_zone="New zone",
+        product_category="New category",
+        weight_kg=999,
+        order_amount=999,
+    )
+    assert upload(client, rows_csv([changed]), update="true").json()["updated"] == 1
+    with session() as db:
+        pd.testing.assert_frame_equal(before_frame, service.orders_frame(db, training=True))
+    assert client.get("/orders/SYN-42-00000/initial-snapshot").json()["values"] == original
+    assert client.post("/predict", json=original).json() == original_prediction
+    assert len(loads) == 1
+    assert (
+        client.post(f"/models/{run['id']}/activate", json={"reviewed_limits": True}).status_code
+        == 200
+    )
+    assert client.post("/predict", json=order).json() == first
+    assert len(loads) == 2
+    # Another process can change the DB pointer: the version key must invalidate
+    # this process's cache even without calling its activation function.
+    from deliveryguard.db import ActiveModel, Run, uid
+
+    other_id = uid()
+    artifact = settings().data_dir / "models" / f"{run['id']}.joblib"
+    (artifact.parent / f"{other_id}.joblib").write_bytes(artifact.read_bytes())
+    with session() as db, db.begin():
+        db.add(Run(id=other_id, status="succeeded", report=run["report"]))
+        db.flush()
+        db.get(ActiveModel, 1).run_id = other_id
+    assert client.post("/predict", json=order).json()["model_id"] == other_id
+    assert len(loads) == 3
+    client.post(f"/models/{run['id']}/activate", json={"reviewed_limits": True})
     assert client.get("/exports/orders.csv").status_code == 200
     artifact = settings().data_dir / "models" / f"{run['id']}.joblib"
     artifact.write_bytes(b"corrupted")
@@ -264,6 +326,167 @@ def test_demo_limits_and_explicit_security(client, monkeypatch, tmp_path):
     client.headers.clear()
     assert client.get("/models").status_code == 200
     assert upload(client, generate(5001)).status_code == 413
+    assert (
+        upload(client, rows_csv([base_row()])).json()["error"]["code"] == "demo_import_restricted"
+    )
+    assert (
+        client.post(
+            "/imports/preview", files={"file": ("x.csv", rows_csv([base_row()]), "text/csv")}
+        ).status_code
+        == 403
+    )
+    assert client.get("/analytics/summary").json()["total"] == 0
+    assert not list(settings().data_dir.glob("imports/*/source.csv"))
+    assert upload(client, generate()).json()["valid"] == 1500
+    assert upload(client, generate(), update="true").status_code == 403
+    tampered = generate().replace(b"Atlas", b"Other", 1)
+    assert upload(client, tampered).status_code == 403
+    from deliveryguard.quality import FIELDS
+
+    headers = {field: field for field in FIELDS}
+    headers["private@example.com"] = headers.pop("order_id")
+    disguised = generate().replace(b"order_id", b"private@example.com", 1)
+    assert upload(client, disguised, mapping=json.dumps(headers)).status_code == 403
+    assert len(list(settings().data_dir.glob("imports/*/source.csv"))) == 1
+
+
+def test_initial_promise_corrections_and_database_immutability(client):
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    from deliveryguard import service
+    from deliveryguard.db import Order, session
+
+    upload(client, rows_csv([base_row(carrier="Initial")]))
+    snapshot = client.get("/orders/A1/initial-snapshot").json()
+    moved = base_row(
+        carrier="Reassigned",
+        promised_delivery_at="2025-01-06",
+        status="delivered",
+        delivered_at="2025-01-04",
+    )
+    assert upload(client, rows_csv([moved]), update="true").json()["updated"] == 1
+    assert client.get("/orders/A1/initial-snapshot").json() == snapshot
+    result = client.get("/analytics/summary").json()
+    assert result["late"] == 1 and result["late_rate"] == 1
+    exported = pd.read_csv(io.BytesIO(client.get("/exports/orders.csv").content))
+    assert exported.iloc[0]["observed_late"] == 1
+    assert exported.iloc[0]["initial_carrier"] == "Initial"
+    with pytest.raises(DBAPIError), engine().begin() as connection:
+        connection.execute(text("UPDATE orders SET initial_snapshot = '{}'::json"))
+    # Preview cannot invalidate a snapshot or alter data.
+    response = client.post(
+        "/imports/preview",
+        files={"file": ("x.csv", rows_csv([moved]), "text/csv")},
+        data={"update": "true", "correction_code": "SOURCE_FEATURE_ERROR"},
+    )
+    assert response.status_code == 200
+    assert client.get("/orders/A1/initial-snapshot").json()["eligible"]
+    receipt = upload(
+        client, rows_csv([moved]), update="true", correction_code="SOURCE_FEATURE_ERROR"
+    ).json()
+    assert receipt["update_kind"] == "correction"
+    assert receipt["correction_code"] == "SOURCE_FEATURE_ERROR"
+    assert not client.get("/orders/A1/initial-snapshot").json()["eligible"]
+    assert client.get("/orders/A1/initial-snapshot").json()["values"] == snapshot["values"]
+    with session() as db:
+        assert service.orders_frame(db, training=True).empty
+    with pytest.raises(DBAPIError), session() as db, db.begin():
+        db.get(Order, "A1").snapshot_excluded = False
+    corrected_outcome = {**moved, "delivered_at": "2025-01-05"}
+    assert upload(client, rows_csv([corrected_outcome]), update="true").json()["rejected"] == 1
+    assert (
+        upload(
+            client,
+            rows_csv([corrected_outcome]),
+            update="true",
+            correction_code="DELIVERY_TIME_ERROR",
+        ).json()["updated"]
+        == 1
+    )
+    assert (
+        upload(
+            client, rows_csv([moved]), update="true", correction_code="private@example.com"
+        ).status_code
+        == 422
+    )
+    # A declared outcome correction can repair an erroneous terminal status.
+    fixed = base_row(carrier="Initial")
+    assert upload(client, rows_csv([fixed]), update="true").json()["rejected"] == 1
+    assert (
+        upload(client, rows_csv([fixed]), update="true", correction_code="STATUS_ERROR").json()[
+            "updated"
+        ]
+        == 1
+    )
+
+
+def test_safe_diagnostics_for_request_and_training(client, monkeypatch, caplog):
+    import logging
+
+    from deliveryguard import ml, service
+
+    caplog.set_level(logging.ERROR, logger="deliveryguard")
+
+    def fail(*args, **kwargs):
+        raise ValueError("secret-password customer@example.com SELECT private-business-data")
+
+    monkeypatch.setattr(service, "summary", fail)
+    response = client.get("/analytics/summary")
+    assert response.status_code == 500
+    request_id = response.json()["error"]["request_id"]
+    assert request_id in caplog.text
+    assert "builtins.ValueError" in caplog.text and '"function": "fail"' in caplog.text
+    run_id = client.post("/training-runs").json()["id"]
+    monkeypatch.setattr(ml, "train", fail)
+    assert work_once()
+    assert client.get(f"/training-runs/{run_id}").json()["report"]["code"] == "training_error"
+    assert run_id in caplog.text
+    for private in ["secret-password", "customer@example.com", "private-business-data"]:
+        assert private not in caplog.text and private not in response.text
+
+
+def test_migration_does_not_invent_legacy_snapshots(client):
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import text
+
+    from deliveryguard import service
+    from deliveryguard.db import ActiveModel, session
+
+    config = Config("alembic.ini")
+    command.downgrade(config, "0001")
+    try:
+        with engine().begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO orders (order_id, ordered_at, promised_delivery_at, delivered_at, status) VALUES ('legacy', '2025-01-01', '2025-01-02', '2025-01-03', 'delivered')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO training_runs (id, created_at, status, report) VALUES ('legacy-run', now(), 'succeeded', '{\"activation_allowed\": true}')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO active_model (id, run_id, confirmed) VALUES (1, 'legacy-run', true)"
+                )
+            )
+    finally:
+        command.upgrade(config, "head")
+    assert client.get("/orders/legacy/initial-snapshot").json() == {
+        "values": None,
+        "eligible": False,
+    }
+    assert client.get("/analytics/summary").json()["excluded_outcomes"] == 1
+    with session() as db:
+        assert service.orders_frame(db, training=True).empty
+        assert db.get(ActiveModel, 1) is None
+    assert not service.get_run("legacy-run")["report"]["activation_allowed"]
+    with pytest.raises(DomainError) as blocked:
+        service.activate("legacy-run", True)
+    assert blocked.value.code == "activation_blocked"
 
 
 def test_optional_columns_do_not_block_base_workflow(client):

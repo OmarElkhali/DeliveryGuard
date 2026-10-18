@@ -19,6 +19,7 @@ def main():
     imp.add_argument("file")
     imp.add_argument("--mapping")
     imp.add_argument("--update", action="store_true")
+    imp.add_argument("--correction-code", default="")
     sub.add_parser("smoke")
     args = parser.parse_args()
     if args.command == "generate":
@@ -47,7 +48,13 @@ def main():
         mapping = json.loads(Path(args.mapping).read_text()) if args.mapping else None
         print(
             json.dumps(
-                import_csv(Path(args.file).read_bytes(), mapping, args.update), ensure_ascii=False
+                import_csv(
+                    Path(args.file).read_bytes(),
+                    mapping,
+                    args.update,
+                    correction_code=args.correction_code,
+                ),
+                ensure_ascii=False,
             )
         )
     elif args.command == "smoke":

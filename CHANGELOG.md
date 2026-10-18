@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Immutable order-time snapshots, initial-promise labels and explicit correction
+  codes. Legacy rows without proven snapshots are excluded; migration deactivates
+  legacy models and requires a fresh evaluation.
+- Independently selected Dummy threshold and constant on-time/late baselines.
+- Bounded model cache with version/file-change invalidation; safe technical
+  diagnostics correlated with request/run IDs.
+- Server-enforced demo imports restricted to the bundled synthetic fixture.
+- Short bilingual entry pages; full illustrated reports moved to docs/walkthrough.
+
 ## 0.1.0 — 2026-10-18
 
 - Initial local pilot: CSV mapping, preview, strict quality audit, rejected export,

@@ -28,7 +28,7 @@ ACTIONS = {
     "invalid_row": "Vérifier les formats ISO 8601, les nombres et le statut.",
     "conflict": "Vérifier la commande existante puis autoriser explicitement la mise à jour.",
     "immutable_order_date": "La date de commande existante ne peut pas changer.",
-    "terminal_status": "Une commande terminée ne peut pas redevenir ouverte ou changer d'issue.",
+    "terminal_status": "Déclarer une correction pour modifier le statut ou la date d'une issue terminée.",
 }
 
 

@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import text
+from sqlalchemy import select, text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from deliveryguard import __version__, service
@@ -19,6 +19,7 @@ from deliveryguard.config import settings
 from deliveryguard.contracts import (
     ErrorResponse,
     ImportReceipt,
+    InitialSnapshot,
     ModelInfo,
     PredictionResponse,
     QualityReport,
@@ -26,7 +27,8 @@ from deliveryguard.contracts import (
     Summary,
     TrainingRun,
 )
-from deliveryguard.db import Import, engine, session
+from deliveryguard.db import Import, Order, engine, session
+from deliveryguard.diagnostics import log_failure
 from deliveryguard.quality import DomainError, NewOrder, csv_bytes
 
 logger = logging.getLogger("deliveryguard")
@@ -45,7 +47,8 @@ app = FastAPI(
     lifespan=lifespan,
     description="Single-company pilot. Explicit model activation. Uncalibrated risk scores.",
     responses={
-        code: {"model": ErrorResponse} for code in [400, 401, 404, 409, 413, 415, 422, 500, 503]
+        code: {"model": ErrorResponse}
+        for code in [400, 401, 403, 404, 409, 413, 415, 422, 500, 503]
     },
 )
 key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -88,7 +91,8 @@ async def request_log(request: Request, call_next):
         response = await call_next(request)
     except DomainError as exc:
         response = await domain_error(request, exc)
-    except Exception:
+    except Exception as exc:
+        log_failure(exc, request_id=request_id)
         response = JSONResponse(
             status_code=500,
             content={
@@ -162,16 +166,17 @@ def live():
 
 
 @app.get("/health/ready")
-def ready():
+def ready(request: Request):
     try:
         with engine().connect() as db:
             revision = db.scalar(text("SELECT version_num FROM alembic_version"))
             db.execute(text("SELECT 1 FROM orders LIMIT 1"))
-        if revision != "0001":
+        if revision != "0002":
             raise RuntimeError("Migration required")
         settings().validate_security()
         return {"status": "ready"}
-    except Exception:
+    except Exception as exc:
+        log_failure(exc, request_id=request.state.request_id, operation="readiness")
         raise DomainError("not_ready", "Base ou migrations indisponibles", 503) from None
 
 
@@ -204,11 +209,12 @@ async def preview(
     file: Annotated[UploadFile, File()],
     mapping: Annotated[str, Form()] = "",
     update: Annotated[bool, Form()] = False,
+    correction_code: Annotated[str, Form()] = "",
 ):
     from starlette.concurrency import run_in_threadpool
 
     raw, parsed = await upload(file, mapping)
-    return await run_in_threadpool(service.import_csv, raw, parsed, update, True)
+    return await run_in_threadpool(service.import_csv, raw, parsed, update, True, correction_code)
 
 
 @app.post(
@@ -218,17 +224,25 @@ async def import_file(
     file: Annotated[UploadFile, File()],
     mapping: Annotated[str, Form()] = "",
     update: Annotated[bool, Form()] = False,
+    correction_code: Annotated[str, Form()] = "",
 ):
     from starlette.concurrency import run_in_threadpool
 
     raw, parsed = await upload(file, mapping)
-    return await run_in_threadpool(service.import_csv, raw, parsed, update)
+    return await run_in_threadpool(service.import_csv, raw, parsed, update, False, correction_code)
+
+
+@app.get(
+    "/orders/{order_id}/initial-snapshot",
+    response_model=InitialSnapshot,
+    dependencies=[Depends(authorize)],
+)
+def initial_snapshot(order_id: str):
+    return service.initial_snapshot(order_id)
 
 
 @app.get("/imports", dependencies=[Depends(authorize)])
 def imports():
-    from sqlalchemy import select
-
     with session() as db:
         return [
             {"id": i.id, "created_at": i.created_at, **i.report}
@@ -309,13 +323,25 @@ def analytics():
 @app.get("/exports/orders.csv", dependencies=[Depends(authorize)])
 def export_orders():
     with session() as db:
-        rows = service.orders_frame(db).to_dict("records")
-    for row in rows:
-        row["observed_late"] = (
-            int(row["delivered_at"] > row["promised_delivery_at"])
-            if row["status"] == "delivered"
-            else None
-        )
+        rows = []
+        for order in db.scalars(select(Order).order_by(Order.ordered_at, Order.order_id)):
+            row = service.order_dict(order)
+            snapshot = order.initial_snapshot
+            eligible = bool(snapshot and not order.snapshot_excluded)
+            row.update(
+                {
+                    "initial_" + k: (snapshot or {}).get(k)
+                    for k in NewOrder.model_fields
+                    if k != "order_id"
+                }
+            )
+            row["initial_snapshot_eligible"] = eligible
+            row["observed_late"] = (
+                int(order.delivered_at > NewOrder.model_validate(snapshot).promised_delivery_at)
+                if order.status == "delivered" and eligible
+                else None
+            )
+            rows.append(row)
     return Response(
         csv_bytes(rows),
         media_type="text/csv",

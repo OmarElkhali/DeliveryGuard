@@ -4,6 +4,13 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from deliveryguard.quality import NewOrder
+
+
+class InitialSnapshot(BaseModel):
+    values: NewOrder | None
+    eligible: bool
+
 
 class ErrorDetail(BaseModel):
     code: str
@@ -23,6 +30,8 @@ class Issue(BaseModel):
 
 
 class QualityReport(BaseModel):
+    update_kind: str = "operational"
+    correction_code: str = ""
     total: int
     valid: int
     rejected: int
@@ -72,6 +81,7 @@ class PredictionResponse(BaseModel):
 
 
 class Summary(BaseModel):
+    excluded_outcomes: int
     counts: dict[str, int]
     total: int
     observed: int

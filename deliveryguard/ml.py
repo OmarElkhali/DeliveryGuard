@@ -26,6 +26,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sqlalchemy import select, text
 
 from deliveryguard.db import Run, engine, now, session
+from deliveryguard.diagnostics import log_failure
 from deliveryguard.quality import DomainError
 from deliveryguard.service import lock, orders_frame, private_file
 
@@ -91,6 +92,12 @@ def metrics(y, scores, threshold):
     }
 
 
+def select_threshold(y, scores):
+    return float(
+        max(np.linspace(0.05, 0.95, 37), key=lambda t: f1_score(y, scores >= t, zero_division=0))
+    )
+
+
 def split(frame):
     data = frame[frame.status == "delivered"].copy()
     for c in ["ordered_at", "delivered_at", "promised_delivery_at"]:
@@ -133,6 +140,9 @@ def split(frame):
             "latest_outcome": part.delivered_at.max().isoformat(),
         }
     summaries["purged_unavailable_outcomes"] = len(data) - sum(len(p[1]) for p in parts)
+    summaries["excluded_missing_or_corrected_snapshot"] = frame.attrs.get(
+        "excluded_missing_or_corrected_snapshot", 0
+    )
     return parts, summaries
 
 
@@ -173,13 +183,22 @@ def train(frame, run_id):
     best = max(range(1, len(results)), key=lambda i: results[i]["validation_average_precision"])
     model = fitted[best]
     val_scores = model.predict_proba(xv)[:, 1]
-    thresholds = np.linspace(0.05, 0.95, 37)
-    threshold = float(max(thresholds, key=lambda t: f1_score(yv, val_scores >= t, zero_division=0)))
+    threshold = select_threshold(yv, val_scores)
     val_metrics = metrics(yv, val_scores, threshold)
     test_metrics = metrics(yt, model.predict_proba(xt)[:, 1], threshold)
     baseline = {
-        "validation": metrics(yv, fitted[0].predict_proba(xv)[:, 1], threshold),
-        "test": metrics(yt, fitted[0].predict_proba(xt)[:, 1], threshold),
+        "threshold": select_threshold(yv, fitted[0].predict_proba(xv)[:, 1]),
+    }
+    baseline.update(
+        validation=metrics(yv, fitted[0].predict_proba(xv)[:, 1], baseline["threshold"]),
+        test=metrics(yt, fitted[0].predict_proba(xt)[:, 1], baseline["threshold"]),
+    )
+    constant_baselines = {
+        name: {
+            period: metrics(y, np.full(len(y), value), 0.5)
+            for period, y in [("validation", yv), ("test", yt)]
+        }
+        for name, value in [("all_on_time", 0), ("all_late", 1)]
     }
     importance = permutation_importance(
         model, xv, yv, n_repeats=3, scoring="average_precision", random_state=42, n_jobs=1
@@ -191,6 +210,7 @@ def train(frame, run_id):
     snapshot = frame.to_csv(index=False).encode()
     private_file(f"models/{run_id}.csv", snapshot)
     return {
+        "snapshot_policy": "initial_v1",
         "activation_allowed": allowed,
         "activation_reason": "Évaluation valable; revue humaine requise"
         if allowed
@@ -204,6 +224,7 @@ def train(frame, run_id):
         "validation": val_metrics,
         "test": test_metrics,
         "baseline": baseline,
+        "constant_baselines": constant_baselines,
         "associations": [
             {"feature": f, "mean": float(m), "std": float(s)}
             for f, m, s in zip(
@@ -250,7 +271,7 @@ def work_once():
                     return False
                 run_id = run.id
                 run.status, run.started_at = "running", now()
-                frame = orders_frame(db)
+                frame = orders_frame(db, training=True)
             try:
                 result = train(frame, run_id)
                 state = "succeeded"
@@ -259,7 +280,8 @@ def work_once():
                     {"code": exc.code, "message": exc.message, "activation_allowed": False},
                     "failed",
                 )
-            except Exception:
+            except Exception as exc:
+                log_failure(exc, run_id=run_id, operation="training")
                 # Do not expose training data, SQL parameters, or exception payloads in logs/API.
                 result, state = (
                     {
@@ -280,5 +302,8 @@ def work_once():
 
 def worker():
     while True:
-        work_once()
+        try:
+            work_once()
+        except Exception as exc:
+            log_failure(exc, operation="worker_poll")
         time.sleep(2)

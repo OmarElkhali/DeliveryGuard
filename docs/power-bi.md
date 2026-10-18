@@ -11,11 +11,15 @@ standard UTF-8 BOM CSVs readable by Power BI Desktop and other BI tools.
    **Date/Time/Timezone**, `weight_kg`, `order_amount`, `risk_score` as decimal
    numbers, and `observed_late` as nullable whole number. Use a locale with decimal
    dot for numeric conversion; do not change the CSV's underlying precision.
-4. `observed_late` is 0/1 only for delivered orders. Nulls for open/cancelled must
+4. `observed_late` compares delivery with the **initial** promise, and is 0/1 only
+   for delivered orders with an eligible original snapshot. Nulls for open/cancelled,
+   missing legacy snapshots or contested snapshots must
    stay null; do not replace them with 0. Rate = sum(observed_late) / non-null count.
 5. Join risk rankings by order_id if the new orders also appear in stored history.
    The ranking export includes model_id and threshold for traceability.
    A score is not a calibrated probability and overdue alerts are separate.
+   Historical analysis should use `initial_*` fields; unprefixed fields describe
+   the current operational state. Inspect `initial_snapshot_eligible` before joining.
 6. For scheduled local refresh, save authenticated exports to a company-controlled
    folder and use your organization's existing Power BI gateway. Nothing here
    provisions a gateway, publishes a dataset, or sends data to Microsoft by default.

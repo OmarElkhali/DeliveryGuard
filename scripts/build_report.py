@@ -31,6 +31,20 @@ def snapshot(api):
     assert get("/health/live").json()["demo"], "Report capture is restricted to synthetic demo mode"
     expected = pd.read_csv(io.BytesIO(generate()))
     actual = pd.read_csv(io.BytesIO(get("/exports/orders.csv").content))
+    assert actual["initial_snapshot_eligible"].all(), (
+        "Every demo row must have a usable initial snapshot"
+    )
+    for column in expected.columns.drop(["order_id", "status", "delivered_at"]):
+        if column in ["ordered_at", "promised_delivery_at"]:
+            pd.testing.assert_series_equal(
+                pd.to_datetime(actual[column], utc=True),
+                pd.to_datetime(actual["initial_" + column], utc=True),
+                check_names=False,
+            )
+        else:
+            pd.testing.assert_series_equal(
+                actual[column], actual["initial_" + column], check_names=False
+            )
     for frame in [expected, actual]:
         for column in ["ordered_at", "promised_delivery_at", "delivered_at"]:
             frame[column] = pd.to_datetime(frame[column], format="mixed", utc=True).astype(
@@ -208,6 +222,7 @@ def figures(data):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--api-url", default="http://127.0.0.1:8000")
+    parser.add_argument("--ui-url", default="http://127.0.0.1:8501")
     parser.add_argument(
         "--snapshot", action="store_true", help="Rebuild plots from the saved public snapshot"
     )
@@ -267,7 +282,7 @@ def main():
             browser.close()
             print("Rebuilt five figures from the saved synthetic evaluation snapshot")
             return
-        page.goto("http://127.0.0.1:8501")
+        page.goto(args.ui_url)
         expect(page.get_by_role("button", name="Charger la démonstration")).to_be_visible(
             timeout=60000
         )
@@ -296,6 +311,10 @@ def main():
         expect(page.get_by_test_id("stApp")).to_have_attribute(
             "data-test-script-state", "notRunning"
         )
+        page.get_by_role("heading", name="Baselines de classification", exact=True).evaluate(
+            "e => e.scrollIntoView({block:'start'})"
+        )
+        page.screenshot(path=str(ROOT / "docs" / "screenshots" / "09-baselines.png"))
         page.get_by_role("button", name="Activer cette version", exact=True).evaluate(
             "e => e.scrollIntoView({block:'end'})"
         )
@@ -308,7 +327,7 @@ def main():
                 "synthetic_source_verified": True,
                 "run_id": data["run_id"],
                 "figures": 5,
-                "additional_ui_screenshots": 2,
+                "additional_ui_screenshots": 3,
                 "page_errors": errors,
             },
             indent=2,
