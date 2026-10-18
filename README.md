@@ -1,4 +1,4 @@
-# DeliveryGuard ? v0.1.0
+# DeliveryGuard · v0.1.0
 
 [![Checks](https://github.com/OmarElkhali/DeliveryGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/OmarElkhali/DeliveryGuard/actions/workflows/ci.yml)
 
@@ -6,15 +6,15 @@
 
 A self-hosted, single-company pilot with a French interface. Inspect CSV quality,
 analyze observed delays, evaluate a model and activate it after human review.
-Python ? pandas ? PostgreSQL ? FastAPI ? scikit-learn ? Streamlit ? Plotly.
+Python · pandas · PostgreSQL · FastAPI · scikit-learn · Streamlit · Plotly.
 No external account, paid service or external API key is needed.
 
 **Pilot software. All examples are synthetic; no real-world predictive value or
-customer adoption is claimed.** [Lire en fran?ais](README.fr.md).
+customer adoption is claimed.** [Lire en français](README.fr.md).
 
 [![Open the recorded browser demonstration](docs/screenshots/07-risk-ranking.png)](https://raw.githubusercontent.com/OmarElkhali/DeliveryGuard/main/docs/demo.gif)
 
-*Click the image for the real browser GIF: upload ? audit ? evaluate ? activate ? rank.*
+*Click the image for the real browser GIF: upload → audit → evaluate → activate → rank.*
 [Full illustrated walkthrough and measured results](docs/walkthrough.md).
 
 ## Run the synthetic demonstration
@@ -27,10 +27,10 @@ cd DeliveryGuard
 docker compose --env-file .env.demo up --build -d --wait
 ```
 
-Open **http://localhost:8501** and click **Charger la d?monstration**. Examine
-**Qualit?** and **Analyse des livraisons**, then create a run in **Mod?les et
-?valuation**. Refresh until finished, review its evaluation and limits, and activate
-it yourself. In **Commandes ? surveiller**, upload
+Open **http://localhost:8501** and click **Charger la démonstration**. Examine
+**Qualité** and **Analyse des livraisons**, then create a run in **Modèles et
+évaluation**. Refresh until finished, review its evaluation and limits, and activate
+it yourself. In **Commandes à surveiller**, upload
 [examples/new_orders.csv](examples/new_orders.csv) and calculate risks.
 
 API/OpenAPI: **http://localhost:8000/docs**. Readiness: `/health/ready`.
@@ -56,10 +56,10 @@ it does not validate a company's decision policy. Scores are not calibrated prob
 
 | Synthetic order | Risk score | Label at threshold 0.20 |
 |---|---:|---|
-| `NEW-001` | 0.5662 | ? examiner |
-| `NEW-002` | 0.0749 | Priorit? moindre |
+| `NEW-001` | 0.5662 | À examiner |
+| `NEW-002` | 0.0749 | Priorité moindre |
 
-[Evaluation snapshot](docs/results/synthetic-evaluation.json) ?
+[Evaluation snapshot](docs/results/synthetic-evaluation.json) ·
 [Splits, baselines, metrics and figures](docs/walkthrough.md#measured-results-on-the-synthetic-demo).
 
 ## Use company data
@@ -86,11 +86,11 @@ HTTPS are needed before broader company use.
 | CSV schema, immutable snapshots and corrections | [Data contract](docs/data-contract.md) |
 | Native Python setup and checks | [Development and verification](docs/walkthrough.md#native-python-development) |
 | Actual checks and remaining verification limits | [Verification report](docs/verification.md) |
-| API examples and BI exports | [Integration](docs/integration.md) ? [Power BI](docs/power-bi.md) |
-| Model assumptions and limits | [Model card](MODEL_CARD.md) ? [Pilot limits](docs/limits.md) |
-| Deployment, backups and diagnosis | [Operations](docs/operations.md) ? [Architecture](docs/architecture.md) |
+| API examples and BI exports | [Integration](docs/integration.md) · [Power BI](docs/power-bi.md) |
+| Model assumptions and limits | [Model card](MODEL_CARD.md) · [Pilot limits](docs/limits.md) |
+| Deployment, backups and diagnosis | [Operations](docs/operations.md) · [Architecture](docs/architecture.md) |
 
-Author: **Omar Elkhali**, Master 2 BDIO ? ENSAM Casablanca.
-[GitHub](https://github.com/OmarElkhali/) ? [LinkedIn](https://www.linkedin.com/in/omar-elkhali-2bb683270/).
+Author: **Omar Elkhali**, Master 2 BDIO — ENSAM Casablanca.
+[GitHub](https://github.com/OmarElkhali/) · [LinkedIn](https://www.linkedin.com/in/omar-elkhali-2bb683270/).
 [MIT](LICENSE) for project code and generated examples; no rights to third-party datasets.
-[Contributing](CONTRIBUTING.md) ? [Security](SECURITY.md).
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md).

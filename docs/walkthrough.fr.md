@@ -1,4 +1,4 @@
-# DeliveryGuard · v0.1.0
+# DeliveryGuard · rapport illustré
 
 [![Vérifications](https://github.com/OmarElkhali/DeliveryGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/OmarElkhali/DeliveryGuard/actions/workflows/ci.yml)
 
@@ -211,7 +211,7 @@ variabilité d'un échantillon limité.
 
 | Contrôle | Résultat local enregistré |
 |---|---|
-| Suite pytest sur PostgreSQL | **29 tests réussis**, un avertissement de dépréciation signalé |
+| Suite pytest sur PostgreSQL | **32 tests réussis**, un avertissement de dépréciation signalé |
 | Lint et formatage Ruff | Réussis |
 | Build, migration et démarrage Docker Compose | Réussis |
 | Parcours navigateur et téléchargements | Réussis, **0 erreur console/page** |

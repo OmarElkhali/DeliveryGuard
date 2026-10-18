@@ -1,4 +1,4 @@
-# DeliveryGuard · v0.1.0
+# DeliveryGuard · illustrated report
 
 [![Checks](https://github.com/OmarElkhali/DeliveryGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/OmarElkhali/DeliveryGuard/actions/workflows/ci.yml)
 

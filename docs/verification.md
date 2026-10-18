@@ -45,6 +45,14 @@ Les prochains besoins restent une installation observée par une personne
 extérieure, un dataset réel autorisé et des identités/droits distincts. Aucun de
 ces points n'est présenté comme déjà réalisé.
 
+La [CI du correctif `622faef`](https://github.com/OmarElkhali/DeliveryGuard/actions/runs/39145676637)
+a terminé avec les jobs tests et navigateur réussis. La première tentative du
+navigateur avait échoué sur `ERR_NETWORK_CHANGED` ; la relance a réussi sans
+modifier ni filtrer l'exigence de zéro erreur console. Les liens Markdown, ancres,
+images locales et l'encodage UTF-8 des deux README ont également été contrôlés.
+L'ouverture visuelle de github.com dans le navigateur local est restée bloquée
+par le DNS ; elle n'est pas présentée comme une vérification réussie du rendu distant.
+
 ## Environnement de la vérification initiale
 
 - Windows/PowerShell, Python **3.12.3**, PostgreSQL **16.1** local, dépendances
